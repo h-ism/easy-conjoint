@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conjoint Experiment Builder</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --panel:#ffffff; --ink:#1c2430; --muted:#63708a;
+    --line:#e2e6ee; --accent:#3b5bdb; --accent-soft:#eaefff;
+    --ok:#2f9e6f; --warn:#c9762a; --danger:#c0392b; --radius:10px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.45;font-size:15px}
+  header{background:var(--panel);border-bottom:1px solid var(--line);padding:14px 22px;
+    display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:20}
+  header h1{font-size:17px;margin:0;font-weight:650;letter-spacing:.2px}
+  header .sub{color:var(--muted);font-size:12.5px}
+  nav{display:flex;gap:4px;margin-left:auto}
+  nav button{background:none;border:1px solid transparent;padding:7px 14px;border-radius:8px;
+    cursor:pointer;font-size:14px;color:var(--muted);font-weight:550}
+  nav button:hover{background:var(--bg)}
+  nav button.active{background:var(--accent-soft);color:var(--accent);border-color:#d3ddff}
+  main{max-width:960px;margin:0 auto;padding:26px 22px 80px}
+  .tab{display:none}
+  .tab.active{display:block}
+  h2{font-size:16px;margin:0 0 4px}
+  .hint{color:var(--muted);font-size:13px;margin:0 0 18px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:18px;margin-bottom:16px}
+  label{font-size:13px;font-weight:600;color:var(--ink);display:block;margin-bottom:5px}
+  input[type=text],input[type=number],textarea,select{width:100%;padding:9px 11px;border:1px solid var(--line);
+    border-radius:8px;font-size:14px;font-family:inherit;background:#fff;color:var(--ink)}
+  textarea{resize:vertical;min-height:60px}
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .row{display:flex;gap:14px;flex-wrap:wrap}
+  .row > div{flex:1;min-width:150px}
+  .btn{background:var(--accent);color:#fff;border:none;padding:9px 16px;border-radius:8px;
+    font-size:14px;font-weight:600;cursor:pointer}
+  .btn:hover{filter:brightness(1.07)}
+  .btn.ghost{background:#fff;color:var(--accent);border:1px solid #cdd8f5}
+  .btn.subtle{background:var(--bg);color:var(--ink);border:1px solid var(--line)}
+  .btn.danger{background:#fff;color:var(--danger);border:1px solid #f0c9c4}
+  .btn.sm{padding:5px 10px;font-size:12.5px}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .iconbtn{background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px;padding:2px 6px;border-radius:6px}
+  .iconbtn:hover{background:var(--bg);color:var(--danger)}
+  .attr{border:1px solid var(--line);border-radius:var(--radius);margin-bottom:14px;overflow:hidden}
+  .attr-head{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fafbfd;border-bottom:1px solid var(--line)}
+  .attr-head .grip{color:#b7c0d0;cursor:grab;font-size:15px}
+  .attr-head input{font-weight:600}
+  .attr-body{padding:12px}
+  .level{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+  .level .lv-text{flex:1}
+  .level .lv-w{width:78px}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+  .toolbar .spacer{flex:1}
+  .pill{display:inline-block;background:var(--accent-soft);color:var(--accent);padding:2px 9px;
+    border-radius:20px;font-size:12px;font-weight:600}
+  .chk{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--ink);font-weight:500;cursor:pointer}
+  .chk input{width:auto;margin:0}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.4px}
+  .muted{color:var(--muted)}
+  .cons-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;font-size:13px}
+  .cons-row select{width:auto;flex:1;min-width:110px}
+  /* survey */
+  .survey-intro{max-width:640px;margin:0 auto;text-align:center}
+  .profiles{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:18px 0}
+  .profile{border:2px solid var(--line);border-radius:var(--radius);overflow:hidden;background:#fff;
+    display:flex;flex-direction:column;transition:border-color .12s,box-shadow .12s;cursor:pointer}
+  .profile:hover{border-color:#bcc9f2}
+  .profile.chosen{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .profile h3{margin:0;padding:11px 14px;font-size:14px;background:var(--accent-soft);color:var(--accent);text-align:center}
+  .ptable{width:100%;border-collapse:collapse;font-size:13.5px}
+  .ptable td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  .ptable td.k{color:var(--muted);font-weight:600;width:42%}
+  .profile .pick{margin:auto 14px 14px;text-align:center}
+  .progress{height:7px;background:var(--line);border-radius:20px;overflow:hidden;margin:6px 0 20px}
+  .progress > div{height:100%;background:var(--accent);transition:width .25s}
+  .taskq{text-align:center;font-weight:600;margin:10px 0 2px}
+  .center{text-align:center}
+  .flash{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;
+    padding:10px 18px;border-radius:8px;font-size:13.5px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:50}
+  .flash.show{opacity:1}
+  .big-num{font-size:30px;font-weight:700;color:var(--accent)}
+  .stat{display:inline-block;text-align:center;margin-right:28px}
+  .stat .lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+  details.help{margin-bottom:12px;border:1px solid var(--line);border-radius:8px;padding:10px 14px;background:#fff}
+  details.help summary{cursor:pointer;font-weight:600}
+  code{background:var(--bg);padding:1px 5px;border-radius:4px;font-size:12.5px}
+  @media(max-width:620px){.profiles{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Conjoint Experiment Builder</h1>
+    <div class="sub">Design &amp; run forced-choice paired-profile experiments — no server needed</div>
+  </div>
+  <nav>
+    <button data-tab="design" class="active">Design</button>
+    <button data-tab="survey">Survey</button>
+    <button data-tab="data">Data</button>
+    <button data-tab="help">Help</button>
+  </nav>
+</header>
+
+<main>
+  <!-- ============ DESIGN ============ -->
+  <section id="design" class="tab active">
+    <div class="toolbar">
+      <span class="pill" id="attrCount">0 attributes</span>
+      <div class="spacer"></div>
+      <button class="btn subtle sm" id="loadSample">Load sample study</button>
+      <button class="btn ghost sm" id="importBtn">Import JSON</button>
+      <button class="btn ghost sm" id="exportBtn">Export JSON</button>
+      <input type="file" id="importFile" accept="application/json" style="display:none">
+    </div>
+
+    <div class="card">
+      <h2>Study details</h2>
+      <p class="hint">Basic information respondents see and metadata for your export.</p>
+      <div class="row" style="margin-bottom:12px">
+        <div>
+          <label>Study title</label>
+          <input type="text" id="studyTitle" placeholder="e.g. Immigrant admission preferences">
+        </div>
+      </div>
+      <div>
+        <label>Instructions shown to respondents</label>
+        <textarea id="studyIntro" placeholder="Explain the choice task, e.g. 'Please read the two profiles and select the one you prefer.'"></textarea>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Attributes &amp; levels</h2>
+      <p class="hint">Each attribute is a row shown for both profiles. Levels are randomly assigned. Optional weights bias the random draw (leave all equal for uniform sampling).</p>
+      <div id="attrList"></div>
+      <button class="btn ghost sm" id="addAttr">+ Add attribute</button>
+    </div>
+
+    <div class="card">
+      <h2>Constraints <span class="muted" style="font-weight:400;font-size:12px">(optional)</span></h2>
+      <p class="hint">Forbid implausible combinations. A pair of profiles is re-drawn until no forbidden level-pairing appears within a profile.</p>
+      <div id="consList"></div>
+      <button class="btn ghost sm" id="addCons">+ Add constraint</button>
+    </div>
+
+    <div class="card">
+      <h2>Task settings</h2>
+      <div class="row" style="margin-bottom:14px">
+        <div>
+          <label>Number of tasks per respondent</label>
+          <input type="number" id="numTasks" min="1" max="50" value="5">
+        </div>
+        <div>
+          <label>Profiles per task</label>
+          <input type="number" id="numProfiles" min="2" max="4" value="2">
+        </div>
+      </div>
+      <label class="chk" style="margin-bottom:8px"><input type="checkbox" id="randOrder" checked> Randomize attribute row order (once per respondent)</label>
+      <label class="chk" style="margin-bottom:8px"><input type="checkbox" id="noIdentical" checked> Disallow two identical profiles within a task</label>
+      <label class="chk"><input type="checkbox" id="askRating"> Also ask a 1–7 rating for each profile</label>
+    </div>
+  </section>
+
+  <!-- ============ SURVEY ============ -->
+  <section id="survey" class="tab">
+    <div id="surveyStage"></div>
+  </section>
+
+  <!-- ============ DATA ============ -->
+  <section id="data" class="tab">
+    <div class="card">
+      <h2>Collected responses</h2>
+      <p class="hint">Responses are stored in this browser (localStorage). Export to CSV for analysis in R (<code>cjoint</code>), Python, or Stata.</p>
+      <div style="margin:14px 0 20px">
+        <span class="stat"><div class="big-num" id="nResp">0</div><div class="lbl">Respondents</div></span>
+        <span class="stat"><div class="big-num" id="nTasks">0</div><div class="lbl">Choice tasks</div></span>
+        <span class="stat"><div class="big-num" id="nRows">0</div><div class="lbl">Profile rows</div></span>
+      </div>
+      <div class="toolbar">
+        <button class="btn" id="exportCsv">Export CSV (long format)</button>
+        <button class="btn ghost" id="exportRespCsv">Export CSV (respondent×task)</button>
+        <div class="spacer"></div>
+        <button class="btn danger sm" id="clearData">Clear all responses</button>
+      </div>
+      <div style="overflow:auto;max-height:420px;margin-top:8px">
+        <table id="respTable"></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ HELP ============ -->
+  <section id="help" class="tab">
+    <div class="card">
+      <h2>How to use</h2>
+      <details class="help" open><summary>1. Design the experiment</summary>
+        <p>On the <b>Design</b> tab, add attributes (e.g. <i>Education</i>, <i>Country of origin</i>, <i>Job</i>) and their levels. Use <b>Load sample study</b> to see a worked example. Weights let you over- or under-sample a level; equal weights give uniform randomization (the standard choice).</p>
+      </details>
+      <details class="help"><summary>2. Constraints</summary>
+        <p>Add constraints to rule out nonsensical combinations — e.g. forbid <i>Job = Doctor</i> together with <i>Education = No formal</i>. Each profile is redrawn until it satisfies all constraints. Avoid over-constraining, which shrinks the profile space and can bias estimates.</p>
+      </details>
+      <details class="help"><summary>3. Run the survey</summary>
+        <p>Go to the <b>Survey</b> tab. Each respondent gets freshly randomized profiles. Enter or auto-generate a respondent ID, complete the tasks, and the response is saved automatically. Share the single <code>conjoint.html</code> file, or host it — everything runs locally in the browser.</p>
+      </details>
+      <details class="help"><summary>4. Export &amp; analyze</summary>
+        <p>The <b>Data</b> tab exports a <b>long-format CSV</b>: one row per profile per task, with a <code>chosen</code> (0/1) outcome column and one column per attribute. This is exactly the shape AMCE estimation expects. In R:</p>
+        <p><code>library(cjoint); results &lt;- amce(chosen ~ Education + Job + ..., data=d, cluster=TRUE, respondent.id="respondent_id")</code></p>
+      </details>
+      <details class="help"><summary>Notes on randomization</summary>
+        <p>Levels are drawn independently for each attribute and profile (fully randomized design). Attribute display order is randomized per respondent but held constant across their tasks. Save your design with <b>Export JSON</b> so it is reproducible and shareable.</p>
+      </details>
+    </div>
+  </section>
+</main>
+
+<div class="flash" id="flash"></div>
+
+<script>
+"use strict";
+/* ---------------- state ---------------- */
+const LS_DESIGN="conjoint_design_v1", LS_RESP="conjoint_responses_v1";
+let design=loadDesign();
+let responses=loadResponses();
+let run=null; // active survey run
+
+function loadDesign(){
+  try{const d=JSON.parse(localStorage.getItem(LS_DESIGN)); if(d&&d.attributes) return d;}catch(e){}
+  return blankDesign();
+}
+function blankDesign(){
+  return {title:"",intro:"Please read the two profiles below and select the one you would prefer.",
+    attributes:[],constraints:[],numTasks:5,numProfiles:2,randOrder:true,noIdentical:true,askRating:false};
+}
+function loadResponses(){ try{return JSON.parse(localStorage.getItem(LS_RESP))||[];}catch(e){return [];} }
+function saveDesign(){ localStorage.setItem(LS_DESIGN,JSON.stringify(design)); }
+function saveResponses(){ localStorage.setItem(LS_RESP,JSON.stringify(responses)); }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+
+/* ---------------- tabs ---------------- */
+document.querySelectorAll('nav button').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    document.getElementById(b.dataset.tab).classList.add('active');
+    if(b.dataset.tab==='survey') startSurveyIntro();
+    if(b.dataset.tab==='data') renderData();
+  };
+});
+
+/* ---------------- flash ---------------- */
+let flashT;
+function flash(msg){
+  const f=document.getElementById('flash'); f.textContent=msg; f.classList.add('show');
+  clearTimeout(flashT); flashT=setTimeout(()=>f.classList.remove('show'),1900);
+}
+
+/* ---------------- DESIGN rendering ---------------- */
+const $=id=>document.getElementById(id);
+
+function renderDesign(){
+  $('studyTitle').value=design.title||"";
+  $('studyIntro').value=design.intro||"";
+  $('numTasks').value=design.numTasks;
+  $('numProfiles').value=design.numProfiles;
+  $('randOrder').checked=design.randOrder;
+  $('noIdentical').checked=design.noIdentical;
+  $('askRating').checked=design.askRating;
+  renderAttrs();
+  renderCons();
+}
+
+function renderAttrs(){
+  const wrap=$('attrList'); wrap.innerHTML="";
+  design.attributes.forEach((a,ai)=>{
+    const box=document.createElement('div'); box.className='attr';
+    const head=document.createElement('div'); head.className='attr-head';
+    head.innerHTML=`<span class="grip">⋮⋮</span>`;
+    const nameIn=document.createElement('input'); nameIn.type='text'; nameIn.value=a.name;
+    nameIn.placeholder='Attribute name (e.g. Education)';
+    nameIn.oninput=()=>{a.name=nameIn.value; commit(false); refreshConsOptions();};
+    head.appendChild(nameIn);
+    const up=mkIcon('▲',()=>{if(ai>0){[design.attributes[ai-1],design.attributes[ai]]=[design.attributes[ai],design.attributes[ai-1]];commit();}});
+    const down=mkIcon('▼',()=>{if(ai<design.attributes.length-1){[design.attributes[ai+1],design.attributes[ai]]=[design.attributes[ai],design.attributes[ai+1]];commit();}});
+    const del=mkIcon('✕',()=>{design.attributes.splice(ai,1); design.constraints=design.constraints.filter(c=>c.attrA!==a.id&&c.attrB!==a.id); commit();});
+    up.title='Move up'; down.title='Move down'; del.title='Delete attribute';
+    head.appendChild(up); head.appendChild(down); head.appendChild(del);
+    box.appendChild(head);
+
+    const body=document.createElement('div'); body.className='attr-body';
+    a.levels.forEach((lv,li)=>{
+      const row=document.createElement('div'); row.className='level';
+      const t=document.createElement('input'); t.type='text'; t.className='lv-text'; t.value=lv.text;
+      t.placeholder='Level '+(li+1);
+      t.oninput=()=>{lv.text=t.value; commit(false); refreshConsOptions();};
+      const w=document.createElement('input'); w.type='number'; w.className='lv-w'; w.min='0'; w.step='0.1';
+      w.value=lv.weight; w.title='Sampling weight';
+      w.oninput=()=>{lv.weight=parseFloat(w.value)||0; commit(false);};
+      const rm=mkIcon('✕',()=>{a.levels.splice(li,1); commit();}); rm.title='Remove level';
+      row.appendChild(t); row.appendChild(w); row.appendChild(rm);
+      body.appendChild(row);
+    });
+    const addLv=document.createElement('button'); addLv.className='btn subtle sm'; addLv.textContent='+ Add level';
+    addLv.onclick=()=>{a.levels.push({text:'',weight:1}); commit();};
+    body.appendChild(addLv);
+    box.appendChild(body);
+    wrap.appendChild(box);
+  });
+  $('attrCount').textContent=design.attributes.length+' attribute'+(design.attributes.length===1?'':'s');
+}
+function mkIcon(txt,fn){const b=document.createElement('button');b.className='iconbtn';b.textContent=txt;b.onclick=fn;return b;}
+
+function renderCons(){
+  const wrap=$('consList'); wrap.innerHTML="";
+  if(!design.constraints.length){ wrap.innerHTML='<p class="muted" style="font-size:13px;margin:0 0 8px">No constraints. Profiles are fully randomized.</p>'; }
+  design.constraints.forEach((c,ci)=>{
+    const row=document.createElement('div'); row.className='cons-row';
+    row.appendChild(txt('Forbid'));
+    const aSel=attrSelect(c.attrA,v=>{c.attrA=v;c.levelA='';commit();});
+    const alSel=levelSelect(c.attrA,c.levelA,v=>{c.levelA=v;commit(false);});
+    row.appendChild(aSel); row.appendChild(txt('=')); row.appendChild(alSel);
+    row.appendChild(txt('together with'));
+    const bSel=attrSelect(c.attrB,v=>{c.attrB=v;c.levelB='';commit();});
+    const blSel=levelSelect(c.attrB,c.levelB,v=>{c.levelB=v;commit(false);});
+    row.appendChild(bSel); row.appendChild(txt('=')); row.appendChild(blSel);
+    const del=mkIcon('✕',()=>{design.constraints.splice(ci,1);commit();}); del.title='Remove';
+    row.appendChild(del);
+    wrap.appendChild(row);
+  });
+  function txt(t){const s=document.createElement('span');s.textContent=t;s.className='muted';return s;}
+}
+function attrSelect(val,fn){
+  const s=document.createElement('select');
+  s.innerHTML='<option value="">— attribute —</option>'+design.attributes.map(a=>`<option value="${a.id}" ${a.id===val?'selected':''}>${esc(a.name||'(unnamed)')}</option>`).join('');
+  s.onchange=()=>fn(s.value); return s;
+}
+function levelSelect(attrId,val,fn){
+  const s=document.createElement('select'); const a=design.attributes.find(x=>x.id===attrId);
+  const lvs=a?a.levels:[];
+  s.innerHTML='<option value="">— level —</option>'+lvs.map(l=>`<option value="${esc(l.text)}" ${l.text===val?'selected':''}>${esc(l.text||'(blank)')}</option>`).join('');
+  s.onchange=()=>fn(s.value); return s;
+}
+function refreshConsOptions(){ renderCons(); }
+
+/* commit = save + optionally re-render */
+function commit(rerender=true){ syncStudyFields(); saveDesign(); if(rerender){renderAttrs();renderCons();} $('attrCount').textContent=design.attributes.length+' attribute'+(design.attributes.length===1?'':'s'); }
+function syncStudyFields(){
+  design.title=$('studyTitle').value; design.intro=$('studyIntro').value;
+  design.numTasks=clamp(parseInt($('numTasks').value)||1,1,50);
+  design.numProfiles=clamp(parseInt($('numProfiles').value)||2,2,4);
+  design.randOrder=$('randOrder').checked; design.noIdentical=$('noIdentical').checked;
+  design.askRating=$('askRating').checked;
+}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+/* design events */
+$('addAttr').onclick=()=>{design.attributes.push({id:uid(),name:'',levels:[{text:'',weight:1},{text:'',weight:1}]});commit();};
+$('addCons').onclick=()=>{design.constraints.push({attrA:'',levelA:'',attrB:'',levelB:''});commit();};
+['studyTitle','studyIntro','numTasks','numProfiles','randOrder','noIdentical','askRating'].forEach(id=>{
+  $(id).addEventListener('input',()=>commit(false));
+  $(id).addEventListener('change',()=>commit(false));
+});
+$('exportBtn').onclick=()=>{ syncStudyFields(); downloadFile((design.title||'conjoint')+'_design.json', JSON.stringify(design,null,2),'application/json'); };
+$('importBtn').onclick=()=>$('importFile').click();
+$('importFile').onchange=e=>{
+  const f=e.target.files[0]; if(!f)return; const r=new FileReader();
+  r.onload=()=>{ try{const d=JSON.parse(r.result); if(!d.attributes)throw 0; design=Object.assign(blankDesign(),d); saveDesign(); renderDesign(); flash('Design imported');}catch(err){flash('Invalid design file');} };
+  r.readAsText(f); e.target.value='';
+};
+$('loadSample').onclick=()=>{ if(design.attributes.length && !confirm('Replace current design with the sample study?'))return; design=sampleDesign(); saveDesign(); renderDesign(); flash('Sample study loaded'); };
+
+function sampleDesign(){
+  const A=(name,levels)=>({id:uid(),name,levels:levels.map(t=>({text:t,weight:1}))});
+  const d=blankDesign();
+  d.title="Immigrant admission preferences";
+  d.intro="Please read the descriptions of the two immigrants below and indicate which one you would personally prefer to see admitted.";
+  d.attributes=[
+    A("Education",["No formal","High school","College degree","Graduate degree"]),
+    A("Country of origin",["India","Germany","Mexico","Iraq","China"]),
+    A("Profession",["Janitor","Waiter","Nurse","Teacher","Doctor","Research scientist"]),
+    A("Language skills",["Fluent English","Broken English","Tried but unable","Used interpreter"]),
+    A("Prior trips to U.S.",["Never","Once as tourist","Many times as tourist","Six months w/ family"])
+  ];
+  const edu=d.attributes[0].id, prof=d.attributes[2].id;
+  d.constraints=[{attrA:prof,levelA:"Doctor",attrB:edu,levelB:"No formal"},
+                 {attrA:prof,levelA:"Research scientist",attrB:edu,levelB:"No formal"}];
+  d.numTasks=5;
+  return d;
+}
+
+/* ---------------- randomization engine ---------------- */
+function weightedPick(levels){
+  const tot=levels.reduce((s,l)=>s+Math.max(0,l.weight||0),0);
+  if(tot<=0) return levels[Math.floor(Math.random()*levels.length)];
+  let r=Math.random()*tot;
+  for(const l of levels){ r-=Math.max(0,l.weight||0); if(r<=0) return l; }
+  return levels[levels.length-1];
+}
+function drawProfile(){
+  const p={};
+  for(const a of design.attributes){ p[a.id]=weightedPick(a.levels).text; }
+  return p;
+}
+function violatesConstraints(p){
+  for(const c of design.constraints){
+    if(!c.attrA||!c.attrB||!c.levelA||!c.levelB) continue;
+    if(p[c.attrA]===c.levelA && p[c.attrB]===c.levelB) return true;
+  }
+  return false;
+}
+function drawValidProfile(){
+  for(let i=0;i<200;i++){ const p=drawProfile(); if(!violatesConstraints(p)) return p; }
+  return drawProfile(); // give up gracefully
+}
+function sameProfile(a,b){ return design.attributes.every(x=>a[x.id]===b[x.id]); }
+function buildTask(){
+  const n=design.numProfiles, out=[];
+  for(let i=0;i<n;i++){
+    let p, tries=0;
+    do{ p=drawValidProfile(); tries++; }
+    while(design.noIdentical && out.some(q=>sameProfile(q,p)) && tries<200);
+    out.push(p);
+  }
+  return out;
+}
+function buildRun(respId){
+  const order=design.attributes.map((_,i)=>i);
+  if(design.randOrder) shuffle(order);
+  const tasks=[]; for(let t=0;t<design.numTasks;t++) tasks.push(buildTask());
+  return {respId, order, tasks, current:0, choices:[], startedAt:new Date().toISOString()};
+}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}}
+
+/* ---------------- SURVEY ---------------- */
+function designReady(){
+  return design.attributes.length>0 &&
+    design.attributes.every(a=>a.name.trim() && a.levels.filter(l=>l.text.trim()).length>=1);
+}
+function startSurveyIntro(){
+  const stage=$('surveyStage'); run=null;
+  if(!designReady()){
+    stage.innerHTML=`<div class="card center"><h2>Design not ready</h2>
+      <p class="hint">Add at least one attribute, and make sure every attribute has a name and at least one non-empty level.</p></div>`;
+    return;
+  }
+  stage.innerHTML=`<div class="card survey-intro">
+    <h2>${esc(design.title||'Conjoint survey')}</h2>
+    <p class="hint" style="font-size:14px">${esc(design.intro||'')}</p>
+    <div style="max-width:320px;margin:16px auto 18px;text-align:left">
+      <label>Respondent ID</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="respId" placeholder="auto">
+        <button class="btn subtle sm" id="genId">Auto</button>
+      </div>
+    </div>
+    <p class="muted" style="font-size:12.5px">${design.numTasks} task${design.numTasks>1?'s':''} · ${design.numProfiles} profiles each</p>
+    <button class="btn" id="startBtn" style="margin-top:6px">Start survey →</button>
+  </div>`;
+  $('genId').onclick=()=>{$('respId').value='R'+uid().slice(-6).toUpperCase();};
+  $('startBtn').onclick=()=>{
+    let id=$('respId').value.trim(); if(!id) id='R'+uid().slice(-6).toUpperCase();
+    run=buildRun(id); renderTask();
+  };
+}
+
+function renderTask(){
+  const stage=$('surveyStage');
+  const t=run.current, task=run.tasks[t], n=design.numProfiles;
+  const pct=Math.round((t/design.numTasks)*100);
+  const rows=run.order.map(i=>design.attributes[i]);
+  let cards='';
+  for(let p=0;p<n;p++){
+    cards+=`<div class="profile" data-p="${p}">
+      <h3>Profile ${p+1}</h3>
+      <table class="ptable">${rows.map(a=>`<tr><td class="k">${esc(a.name)}</td><td>${esc(task[p][a.id])}</td></tr>`).join('')}</table>
+      ${design.askRating?`<div class="pick"><label style="font-weight:600">Rating (1–7)</label>
+        <select class="rating" data-p="${p}"><option value="">—</option>${[1,2,3,4,5,6,7].map(v=>`<option>${v}</option>`).join('')}</select></div>`:''}
+      <div class="pick"><button class="btn ghost pickbtn" data-p="${p}">Choose Profile ${p+1}</button></div>
+    </div>`;
+  }
+  stage.innerHTML=`
+    <div class="progress"><div style="width:${pct}%"></div></div>
+    <div class="taskq">Task ${t+1} of ${design.numTasks}</div>
+    <p class="center hint">Which profile do you prefer? Click a card or its button.</p>
+    <div class="profiles" style="grid-template-columns:repeat(${n},1fr)">${cards}</div>
+    <div class="center" style="margin-top:4px"><span class="muted" style="font-size:12.5px">Respondent: ${esc(run.respId)}</span></div>`;
+
+  let chosen=null;
+  const cardEls=[...stage.querySelectorAll('.profile')];
+  function select(p){ chosen=p; cardEls.forEach(c=>c.classList.toggle('chosen',+c.dataset.p===p)); maybeAdvance(); }
+  cardEls.forEach(c=>c.onclick=e=>{ if(e.target.classList.contains('rating'))return; select(+c.dataset.p); });
+  stage.querySelectorAll('.pickbtn').forEach(b=>b.onclick=e=>{e.stopPropagation();select(+b.dataset.p);});
+
+  function maybeAdvance(){
+    if(chosen==null) return;
+    // record
+    const ratings={};
+    stage.querySelectorAll('.rating').forEach(r=>ratings[r.dataset.p]=r.value);
+    run.choices[t]={chosen, task, ratings, order:[...run.order]};
+    setTimeout(()=>{
+      if(run.current<design.numTasks-1){ run.current++; renderTask(); }
+      else finishRun();
+    },220);
+  }
+}
+
+function finishRun(){
+  const rec={
+    respId:run.respId, startedAt:run.startedAt, finishedAt:new Date().toISOString(),
+    studyTitle:design.title, order:run.order,
+    attributes:design.attributes.map(a=>({id:a.id,name:a.name})),
+    numProfiles:design.numProfiles,
+    tasks:run.choices.map((ch,ti)=>({
+      task:ti+1, chosen:ch.chosen,
+      profiles:ch.task.map((prof,pi)=>{
+        const row={}; design.attributes.forEach(a=>row[a.name]=prof[a.id]);
+        return {profile:pi+1, chosen:pi===ch.chosen?1:0, rating:ch.ratings[pi]||"", levels:row};
+      })
+    }))
+  };
+  responses.push(rec); saveResponses();
+  const stage=$('surveyStage');
+  stage.innerHTML=`<div class="card center">
+    <h2>Thank you! ✓</h2>
+    <p class="hint">Response for <b>${esc(run.respId)}</b> saved (${design.numTasks} tasks).</p>
+    <button class="btn" id="again">Start another respondent</button>
+    <button class="btn subtle" id="toData" style="margin-left:8px">View data →</button>
+  </div>`;
+  $('again').onclick=startSurveyIntro;
+  $('toData').onclick=()=>document.querySelector('nav button[data-tab="data"]').click();
+  flash('Response saved');
+}
+
+/* ---------------- DATA ---------------- */
+function renderData(){
+  const nResp=responses.length;
+  let nT=0,nRows=0;
+  responses.forEach(r=>{nT+=r.tasks.length; r.tasks.forEach(t=>nRows+=t.profiles.length);});
+  $('nResp').textContent=nResp; $('nTasks').textContent=nT; $('nRows').textContent=nRows;
+  const tbl=$('respTable');
+  if(!nResp){ tbl.innerHTML='<tr><td class="muted" style="padding:16px">No responses yet.</td></tr>'; return; }
+  tbl.innerHTML='<tr><th>Respondent</th><th>Study</th><th>Tasks</th><th>Finished</th><th></th></tr>'+
+    responses.map((r,i)=>`<tr>
+      <td><b>${esc(r.respId)}</b></td><td>${esc(r.studyTitle||'—')}</td>
+      <td>${r.tasks.length}</td>
+      <td class="muted">${esc((r.finishedAt||'').replace('T',' ').slice(0,16))}</td>
+      <td><button class="iconbtn delResp" data-i="${i}" title="Delete">✕</button></td></tr>`).join('');
+  tbl.querySelectorAll('.delResp').forEach(b=>b.onclick=()=>{
+    if(confirm('Delete this response?')){ responses.splice(+b.dataset.i,1); saveResponses(); renderData(); }
+  });
+}
+$('clearData').onclick=()=>{ if(responses.length && confirm('Delete ALL responses? This cannot be undone.')){ responses=[]; saveResponses(); renderData(); flash('All responses cleared'); } };
+
+function allAttrNames(){
+  const set=[]; responses.forEach(r=>r.attributes.forEach(a=>{if(!set.includes(a.name))set.push(a.name);}));
+  return set;
+}
+function csvCell(v){ v=String(v==null?'':v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
+$('exportCsv').onclick=()=>{
+  if(!responses.length){flash('No data to export');return;}
+  const attrs=allAttrNames();
+  const head=['respondent_id','study','task','profile','chosen','rating',...attrs,'finished_at'];
+  const lines=[head.map(csvCell).join(',')];
+  responses.forEach(r=>r.tasks.forEach(t=>t.profiles.forEach(p=>{
+    const row=[r.respId,r.studyTitle,t.task,p.profile,p.chosen,p.rating,
+      ...attrs.map(a=>p.levels[a]!==undefined?p.levels[a]:''),r.finishedAt];
+    lines.push(row.map(csvCell).join(','));
+  })));
+  downloadFile('conjoint_long.csv',lines.join('\n'),'text/csv');
+};
+$('exportRespCsv').onclick=()=>{
+  if(!responses.length){flash('No data to export');return;}
+  const head=['respondent_id','study','task','chosen_profile','finished_at'];
+  const lines=[head.join(',')];
+  responses.forEach(r=>r.tasks.forEach(t=>{
+    lines.push([r.respId,r.studyTitle,t.task,t.chosen+1,r.finishedAt].map(csvCell).join(','));
+  }));
+  downloadFile('conjoint_choices.csv',lines.join('\n'),'text/csv');
+};
+
+/* ---------------- util ---------------- */
+function downloadFile(name,content,type){
+  const blob=new Blob([content],{type}); const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+/* ---------------- init ---------------- */
+renderDesign();
+</script>
+</body>
+</html>
