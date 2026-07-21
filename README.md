@@ -41,7 +41,10 @@ exact same design as a real Qualtrics survey:
   duplicate profiles within a task), writes the shown levels to Embedded Data, renders the
   profile table itself, and is **resume-safe** (sessionStorage → saved Embedded Data → fresh
   draw, so a resumed session never re-randomizes). You only change one line — `var TASK = 1;`
-  — per question.
+  — per question. After rendering, it also **centers the question layout**: the whole question
+  container is centered, and the answer choices are re-centered as a left-aligned group. This
+  is layout-agnostic — it finds the choices from the radio input rather than by Qualtrics class
+  names (which vary by theme/version), and does nothing if no radio choice is present.
 - **`{title}_qualtrics_setup.md`** — a step-by-step setup guide with your actual attribute
   names and task count baked in: how to build the questions, the full list of Embedded Data
   fields to declare in the Survey Flow (required — `setEmbeddedData` alone doesn't record
