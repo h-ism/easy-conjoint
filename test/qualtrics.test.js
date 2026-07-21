@@ -62,22 +62,34 @@ const NT = cj.numTasks, NP = cj.numProfiles, NA = cj.attributes.length;
 const code = B.buildQualtricsJS(design);
 
 /* ---------------- mock Qualtrics survey environment ---------------- */
-function makeEnv() {
+function makeEnv(opts) {
+  opts = opts || {};
   const dom = new JSDOM("<!DOCTYPE html><body></body>", {
     runScripts: "outside-only", url: "http://localhost/"
   });
   const w = dom.window;
-  const env = { window: w, ED: {}, currentQuestion: null, setCalls: 0, warned: 0 };
+  const env = { window: w, ED: {}, currentQuestion: null, setCalls: 0, warned: 0, legacyCalls: 0, jsCalls: 0 };
   w.console = Object.assign(Object.create(console), {
     warn: function () { env.warned++; }
   });
-  w.Qualtrics = { SurveyEngine: {
-    addOnload: function (fn) { fn.call(env.currentQuestion); },
-    setEmbeddedData: function (k, v) { env.ED[k] = String(v); env.setCalls++; },
-    getEmbeddedData: function (k) {
+  const SE = { addOnload: function (fn) { fn.call(env.currentQuestion); } };
+  if (opts.jsApi) {
+    /* new response engine: JS API present (preferred) */
+    SE.setJSEmbeddedData = function (k, v) { env.ED[k] = String(v); env.setCalls++; env.jsCalls++; };
+    SE.getJSEmbeddedData = function (k) {
       return Object.prototype.hasOwnProperty.call(env.ED, k) ? env.ED[k] : null;
-    }
-  } };
+    };
+  }
+  if (opts.jsApi !== "only") {
+    /* legacy API: present on old layouts (and, on the new engine, as a
+       deprecated no-op we must NOT use when the JS API exists) */
+    SE.setEmbeddedData = function (k, v) { env.legacyCalls++; if (!opts.jsApi) { env.ED[k] = String(v); env.setCalls++; } };
+    SE.getEmbeddedData = function (k) {
+      env.legacyCalls++;
+      return Object.prototype.hasOwnProperty.call(env.ED, k) ? env.ED[k] : null;
+    };
+  }
+  w.Qualtrics = { SurveyEngine: SE };
   return env;
 }
 function runTask(env, taskNum) {
@@ -234,6 +246,23 @@ try { cont7 = runTask(env7, 1); } catch (e) { threw7 = true; }
 ok(!threw7, "stale/mismatched cached plan does not crash");
 eq(Object.keys(env7.ED).length, NT * NP * NA + 1, "mismatched plan discarded -> fresh plan written");
 ok(cont7 && cont7.querySelector("table.cjoint-table") !== null, "table still renders after discarding stale plan");
+
+/* =========================================================
+ * (8) new response engine: prefer setJSEmbeddedData/getJSEmbeddedData
+ *     over the deprecated set/getEmbeddedData (which no longer saves).
+ * ========================================================= */
+console.log("\n(8) prefers the JS Embedded Data API when present");
+const env8 = makeEnv({ jsApi: true });   /* both APIs exposed; JS preferred */
+const cont8 = runTask(env8, 1);
+eq(Object.keys(env8.ED).length, NT * NP * NA + 1, "JS API path populates embedded data");
+ok(env8.jsCalls > 0, "used setJSEmbeddedData");
+eq(env8.legacyCalls, 0, "did not touch deprecated set/getEmbeddedData when JS API exists");
+ok(cont8.querySelector("table.cjoint-table") !== null, "table renders under new engine");
+
+/* and the snippet still works when ONLY the JS API is present */
+const env8b = makeEnv({ jsApi: "only" });
+runTask(env8b, 1);
+eq(Object.keys(env8b.ED).length, NT * NP * NA + 1, "works with JS API only (no legacy methods)");
 
 /* =========================================================
  * results
