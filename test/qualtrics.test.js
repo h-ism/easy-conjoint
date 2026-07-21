@@ -330,6 +330,31 @@ eq(dlNames.length, 9, "fallback downloaded all 9 files");
 eq(dlNames.slice().sort(), names.slice().sort(), "fallback downloaded exactly the bundle files");
 
 /* =========================================================
+ * (13) export validation blocks unusable designs.
+ * ========================================================= */
+console.log("\n(13) export validation catches empty/degenerate designs");
+eq(B.qualtricsExportProblems(design), [], "valid design has no problems");
+eq(B.qualtricsExportProblems({ attributes: [] }).length, 1, "no attributes -> one problem");
+const noLevels = { attributes: [
+  { name: "Empty", levels: [{ text: "", weight: 1 }, { text: "  ", weight: 1 }] },
+  { name: "Fine", levels: [{ text: "a", weight: 1 }, { text: "b", weight: 1 }] }
+] };
+const p1 = B.qualtricsExportProblems(noLevels);
+eq(p1.length, 1, "attribute with no non-empty levels -> one problem");
+ok(/no non-empty levels/.test(p1[0]) && /Empty/.test(p1[0]), "problem names the empty attribute");
+const oneLevel = { attributes: [
+  { name: "Single", levels: [{ text: "only", weight: 1 }, { text: "", weight: 1 }] }
+] };
+const p2 = B.qualtricsExportProblems(oneLevel);
+eq(p2.length, 1, "attribute with a single usable level -> one problem");
+ok(/only one usable level/.test(p2[0]), "problem explains the single-level issue");
+const twoBad = { attributes: [
+  { name: "", levels: [] },
+  { name: "X", levels: [{ text: "a", weight: 1 }] }
+] };
+eq(B.qualtricsExportProblems(twoBad).length, 2, "multiple bad attributes -> multiple problems");
+
+/* =========================================================
  * results
  * ========================================================= */
 console.log("\n----------------------------------------");

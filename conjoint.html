@@ -1105,9 +1105,22 @@ function downloadBlob(name, blob){
 function downloadBundleIndividually(bundle){
   bundle.forEach((f,i)=>{ setTimeout(()=>downloadFile(f.name, f.content, guessType(f.name)), i*350); });
 }
+/* Blocking problems that would make the export unusable. Empty = OK. */
+function qualtricsExportProblems(d){
+  const problems=[];
+  if(!d.attributes.length){ problems.push('Add at least one attribute before exporting.'); return problems; }
+  d.attributes.forEach((a,i)=>{
+    const label=a.name&&a.name.trim()?'"'+a.name.trim()+'"':'Attribute '+(i+1);
+    const valid=a.levels.filter(l=>String(l.text).trim()!=="").length;
+    if(valid===0) problems.push(label+' has no non-empty levels.');
+    else if(valid<2) problems.push(label+' has only one usable level — it will not vary and AMCE cannot estimate it.');
+  });
+  return problems;
+}
 async function exportQualtricsZip(){
   syncStudyFields();
-  if(!design.attributes.length){ flash('Add attributes first'); return; }
+  const problems=qualtricsExportProblems(design);
+  if(problems.length){ flash(problems[0]+(problems.length>1?'  (+'+(problems.length-1)+' more)':'')); return; }
   const bundle=buildQualtricsBundle(design);
   const zipName=qSlug(design.title)+'_qualtrics.zip';
   try{
