@@ -162,6 +162,11 @@
           <input type="number" id="numProfiles" min="2" max="4" value="2">
         </div>
       </div>
+      <div style="margin-bottom:14px">
+        <label>Profile labels (column headers shown to respondents)</label>
+        <p class="hint" style="margin:0 0 8px">These appear as the profile column headers in the survey, the generated Qualtrics table, and the choice options. Follows the profile count above.</p>
+        <div class="row" id="profileLabels"></div>
+      </div>
       <label class="chk" style="margin-bottom:8px"><input type="checkbox" id="randOrder" checked> Randomize attribute row order (once per respondent)</label>
       <label class="chk" style="margin-bottom:8px"><input type="checkbox" id="noIdentical" checked> Disallow two identical profiles within a task</label>
       <label class="chk"><input type="checkbox" id="askRating"> Also ask a 1–7 rating for each profile</label>
@@ -238,8 +243,21 @@ function loadDesign(){
 }
 function blankDesign(){
   return {title:"",intro:"Please read the two profiles below and select the one you would prefer.",
-    attributes:[],constraints:[],numTasks:5,numProfiles:2,randOrder:true,noIdentical:true,askRating:false};
+    attributes:[],constraints:[],numTasks:5,numProfiles:2,profileLabels:["Profile 1","Profile 2"],
+    randOrder:true,noIdentical:true,askRating:false};
 }
+/* Default label for the p-th profile (0-based). */
+function profileLabelDefault(i){ return 'Profile '+(i+1); }
+/* Normalize a design's profileLabels to exactly numProfiles entries, filling
+   blanks with the default. Returns the array (also usable read-only). */
+function profileLabelsOf(d){
+  const n=Math.max(1,d.numProfiles||1), src=Array.isArray(d.profileLabels)?d.profileLabels:[];
+  const out=[];
+  for(let i=0;i<n;i++){ const v=src[i]; out.push(v!=null&&String(v).trim()!==""?String(v):profileLabelDefault(i)); }
+  return out;
+}
+/* Mutating variant: keep design.profileLabels in sync with numProfiles. */
+function ensureProfileLabels(){ design.profileLabels=profileLabelsOf(design); }
 function loadResponses(){ try{return JSON.parse(localStorage.getItem(LS_RESP))||[];}catch(e){return [];} }
 function saveDesign(){ localStorage.setItem(LS_DESIGN,JSON.stringify(design)); }
 function saveResponses(){ localStorage.setItem(LS_RESP,JSON.stringify(responses)); }
@@ -275,8 +293,24 @@ function renderDesign(){
   $('randOrder').checked=design.randOrder;
   $('noIdentical').checked=design.noIdentical;
   $('askRating').checked=design.askRating;
+  renderProfileLabels();
   renderAttrs();
   renderCons();
+}
+
+/* Text inputs for each profile's label; count follows numProfiles. */
+function renderProfileLabels(){
+  ensureProfileLabels();
+  const wrap=$('profileLabels'); if(!wrap) return;
+  wrap.innerHTML="";
+  design.profileLabels.forEach((lab,i)=>{
+    const div=document.createElement('div');
+    const l=document.createElement('label'); l.textContent='Profile '+(i+1);
+    const inp=document.createElement('input'); inp.type='text'; inp.value=lab;
+    inp.placeholder=profileLabelDefault(i);
+    inp.oninput=()=>{ design.profileLabels[i]=inp.value; saveDesign(); };
+    div.appendChild(l); div.appendChild(inp); wrap.appendChild(div);
+  });
 }
 
 function renderAttrs(){
@@ -359,6 +393,7 @@ function syncStudyFields(){
   design.numProfiles=clamp(parseInt($('numProfiles').value)||2,2,4);
   design.randOrder=$('randOrder').checked; design.noIdentical=$('noIdentical').checked;
   design.askRating=$('askRating').checked;
+  ensureProfileLabels();
 }
 function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
@@ -370,6 +405,8 @@ $('addCons').onclick=()=>{design.constraints.push({attrA:'',levelA:'',attrB:'',l
   $(id).addEventListener('input',()=>commit(false));
   $(id).addEventListener('change',()=>commit(false));
 });
+/* profile count change -> re-render the label inputs to match */
+['input','change'].forEach(ev=>$('numProfiles').addEventListener(ev,renderProfileLabels));
 $('exportBtn').onclick=()=>{ syncStudyFields(); downloadFile((design.title||'conjoint')+'_design.json', JSON.stringify(design,null,2),'application/json'); };
 
 /* ---------------- Qualtrics export ---------------- */
@@ -401,6 +438,7 @@ function qualtricsDesign(d){
   });
   return {attributes:attrs, constraints,
     numTasks:d.numTasks, numProfiles:d.numProfiles,
+    profileLabels:profileLabelsOf(d),
     randOrder:!!d.randOrder, noIdentical:!!d.noIdentical};
 }
 
@@ -431,10 +469,8 @@ function buildQualtricsJS(d){
 '',
 '  var TASK = 1; /* <<< set THIS question\'s task number (1, 2, 3, ...) */',
 '',
-'  /* Column-header label for each profile (e.g. "Candidate"). Edit freely. */',
-'  var PROFILE_LABEL = "Profile";',
-'',
-'  /* Design embedded as index-based JSON (blank levels already removed). */',
+'  /* Design embedded as index-based JSON (blank levels already removed).',
+'     CJ.profileLabels holds the column header for each profile. */',
 '  var CJ = '+cj+';',
 '',
 '  /* Fingerprint the design into the key: if the design shape changes, the',
@@ -621,7 +657,7 @@ function buildQualtricsJS(d){
 '    html += "<thead><tr>";',
 '    html += \'<th style="width:130px;text-align:left;padding:12px 16px;border-bottom:2px solid #444"></th>\';',
 '    for(p=0;p<np;p++){',
-'      html += \'<th style="text-align:center;padding:12px 16px;border-bottom:2px solid #444;border-left:1px solid #eceef2">\'+esc(PROFILE_LABEL)+" "+(p+1)+"</th>";',
+'      html += \'<th style="text-align:center;padding:12px 16px;border-bottom:2px solid #444;border-left:1px solid #eceef2">\'+esc(CJ.profileLabels[p])+"</th>";',
 '    }',
 '    html += "</tr></thead><tbody>";',
 '    for(oi=0;oi<plan.order.length;oi++){',
@@ -688,91 +724,44 @@ function buildQualtricsJS(d){
   ].join('\n');
 }
 
-/* Human-facing setup guide, with the real attribute names / counts baked in. */
-function buildQualtricsSetup(d){
+/* ================= Qualtrics export bundle ================= */
+/* Shared, side-effect-free data prep for every generated document. */
+function qxData(d){
   const cj=qualtricsDesign(d);
   const NT=cj.numTasks, NP=cj.numProfiles, NA=cj.attributes.length;
-  const title=d.title||'Conjoint study';
-  const fields=qualtricsFields(d);
-  const rStr=s=>'"'+String(s).replace(/\\/g,'\\\\').replace(/"/g,'\\"')+'"';
+  const fields=qualtricsFields(d);                 // C_ORDER, C_T..P..A..
+  const jsFields=fields.map(f=>'__js_'+f);         // Survey-Flow declaration names
   const attrNames=cj.attributes.map(a=>a.name);
-  const mapRows=attrNames.map((n,i)=>'| A'+(i+1)+' | '+String(n).replace(/\|/g,'\\|')+' |').join('\n');
-  const fieldList=fields.map(f=>'- `'+f+'`').join('\n');
-  const rNames='c('+attrNames.map(rStr).join(', ')+')';
+  const labels=cj.profileLabels;
   const nonUniform=cj.attributes.some(a=>a.levels.some(l=>l.weight!==1));
   const hasConstraints=cj.constraints.length>0;
+  let combos=1; cj.attributes.forEach(a=>{ combos*=Math.max(1,a.levels.length); });
+  return {cj,NT,NP,NA,fields,jsFields,attrNames,labels,nonUniform,hasConstraints,
+    combos,finite:isFinite(combos),title:d.title||'Conjoint study'};
+}
+function mdCell(s){ return String(s==null?'':s).replace(/\|/g,'\\|').replace(/\n/g,' '); }
+function rStr(s){ return '"'+String(s).replace(/\\/g,'\\\\').replace(/"/g,'\\"')+'"'; }
+function combosStr(x){ return x.finite?x.combos.toLocaleString('en-US'):'a very large number'; }
 
-  return [
-'# '+title+' — Qualtrics setup guide',
-'',
-'Generated by Conjoint Experiment Builder. This design has **'+NA+' attribute'+(NA===1?'':'s')+
-'**, **'+NT+' task'+(NT===1?'':'s')+'**, and **'+NP+' profiles per task**.',
-'',
-'The companion file `'+qSlug(title)+'_qualtrics.js` holds the JavaScript you paste',
-'into each task question. This guide covers everything around it.',
-'',
-'---',
-'',
-'## 1. Create the choice-task questions',
-'',
-'Create **'+NT+' Multiple Choice question'+(NT===1?'':'s')+'**, one per task, with **one task per page**',
-'(insert a page break between them, or put each in its own block).',
-'',
-'For **each** question:',
-'',
-'1. Question type: **Multiple Choice**, single answer.',
-'2. Add '+NP+' choices, labelled `Profile 1` … `Profile '+NP+'`.',
-'3. Set the **recode values** of those choices to `1` … `'+NP+'`',
-'   (Question behaviour ▸ Recode values). The generated R code relies on this.',
-'4. Name the variables `task1` … `task'+NT+'`',
-'   (Question ▸ set the *Export/Variable name*, or `Q_...`; use `task{N}`).',
-'5. Open the gear ▸ **Add JavaScript** and paste the whole snippet from',
-'   `'+qSlug(title)+'_qualtrics.js`.',
-'6. Change the single line `var TASK = 1;` to match the task number of that',
-'   question (question for task 2 uses `var TASK = 2;`, and so on).',
-'',
-'The snippet draws every task once (on the first question that loads), stores the',
-'result, and simply renders the relevant task afterwards — so profiles stay',
-'consistent even if the respondent navigates back and forth.',
-'',
-'---',
-'',
-'## 2. Declare the Embedded Data (required!)',
-'',
-'> ⚠️ **Calling `setEmbeddedData()` from JavaScript does NOT, by itself, save the',
-'> value into your dataset.** Every field must also be *declared* in the Survey',
-'> Flow, positioned **before** the block that contains the task questions.',
-'',
-'In **Survey ▸ Survey Flow**, add an **Embedded Data** element above the task',
-'block and declare each of the following fields (leave the value blank — the',
-'JavaScript fills them in):',
-'',
-fieldList,
-'',
-'`C_ORDER` records the attribute display order (0-based indices, `|`-separated).',
-'Each `C_T{task}_P{profile}_A{attr}` holds the level **text** shown for that cell.',
-'Declaring them also lets the survey restore the same profiles if a respondent',
-'resumes a partially finished session.',
-'',
-'---',
-'',
-'## 3. Attribute ↔ column reference',
-'',
-'| Field code | Attribute |',
-'| --- | --- |',
-mapRows,
-'',
-'So `C_T2_P1_A3` = the level of **'+(attrNames[2]!==undefined?attrNames[2]:'A3')+'** shown for Profile 1 in Task 2.',
-'',
-'---',
-'',
-'## 4. Analyse in R (wide Qualtrics CSV ▸ long ▸ AMCE)',
-'',
-'Export your data from Qualtrics as **CSV** (wide format). Then:',
-'',
+/* Survey-Flow Embedded-Data declaration list: one field name per line,
+   __js_-prefixed (Simple Layout stores setJSEmbeddedData values under __js_),
+   no descriptions/blank lines — copy-paste ready. */
+function buildQualtricsFieldsTxt(d){ return qxData(d).jsFields.join('\n'); }
+
+/* design.json snapshot — re-importable through Import JSON. */
+function buildDesignSnapshot(d){ return JSON.stringify(d,null,2); }
+
+/* Shared R analysis block (wide Qualtrics CSV -> long -> cjoint::amce). */
+function rAnalysisBlock(x){
+  const rNames='c('+x.attrNames.map(rStr).join(', ')+')';
+  const out=[
 '```r',
 'library(tidyverse)',
 'library(cjoint)',
+'',
+'# Embedded-Data column prefix. Simple Layout stores setJSEmbeddedData under',
+'# "__js_". If your survey uses the Classic/Flat layout, set  ed <- ""  instead.',
+'ed <- "__js_"',
 '',
 '# 1. Read the wide Qualtrics export.',
 'raw <- readr::read_csv("qualtrics_export.csv", show_col_types = FALSE)',
@@ -781,15 +770,15 @@ mapRows,
 '#    directly under the variable-name row. Drop them.',
 'raw <- raw[-c(1, 2), ]',
 '',
-'n_tasks    <- '+NT,
-'n_profiles <- '+NP,
-'n_attrs    <- '+NA,
+'n_tasks    <- '+x.NT,
+'n_profiles <- '+x.NP,
+'n_attrs    <- '+x.NA,
 'attr_names <- '+rNames,
 '',
 '# 3. Reshape wide -> long: one row per (respondent, task, profile).',
+'#    task{t} carries the RECODED answer = chosen profile number (1..n_profiles).',
 'long <- purrr::map_dfr(seq_len(nrow(raw)), function(i) {',
 '  purrr::map_dfr(seq_len(n_tasks), function(t) {',
-'    # recoded task answer = chosen profile number (1..n_profiles)',
 '    picked <- readr::parse_number(as.character(raw[[paste0("task", t)]][i]))',
 '    purrr::map_dfr(seq_len(n_profiles), function(p) {',
 '      row <- tibble::tibble(',
@@ -799,7 +788,8 @@ mapRows,
 '        chosen  = as.integer(!is.na(picked) & picked == p)',
 '      )',
 '      for (a in seq_len(n_attrs)) {',
-'        row[[attr_names[a]]] <- as.character(raw[[paste0("C_T", t, "_P", p, "_A", a)]][i])',
+'        row[[attr_names[a]]] <-',
+'          as.character(raw[[paste0(ed, "C_T", t, "_P", p, "_A", a)]][i])',
 '      }',
 '      row',
 '    })',
@@ -809,37 +799,330 @@ mapRows,
 '# 4. Attributes as factors.',
 'for (nm in attr_names) long[[nm]] <- factor(long[[nm]])',
 '',
-'# 5. AMCE. Attribute names are wrapped in backticks in case they contain spaces.',
-'f <- as.formula(paste("chosen ~", paste0("`", attr_names, "`", collapse = " + ")))',
-'res <- amce(f, data = long, respondent.id = "respondent_id", cluster = TRUE)',
-'summary(res)',
-'```',
-'',
-'---',
-'',
-'## 5. Note on weights & constraints',
-'',
-(nonUniform||hasConstraints
-  ? 'This design uses '+[nonUniform?'**non-uniform level weights**':'',hasConstraints?'**cross-attribute constraints**':''].filter(Boolean).join(' and ')+
-    '. The default `amce()` assumes each level is equally likely and independent, '+
-    'which is **not** true here — you must pass a `design` argument built with '+
-    '`makeDesign()` (see `?makeDesign`) describing the true marginal level '+
-    'probabilities and/or the excluded combinations, or your AMCE estimates will be biased.'
-  : 'This design uses uniform level weights and no constraints, so the default '+
-    '`amce()` (which assumes independent, equally likely levels) is appropriate — '+
-    'no `design` argument needed.'),
-''
-  ].join('\n');
+'# 5. AMCE (attribute names backticked in case they contain spaces).',
+'f <- as.formula(paste("chosen ~", paste0("`", attr_names, "`", collapse = " + ")))'];
+  if(x.nonUniform||x.hasConstraints){
+    out.push('# NOTE: this design has '+[x.nonUniform?'non-uniform weights':'',x.hasConstraints?'constraints':''].filter(Boolean).join(' and ')+
+      ' — pass a design= argument (see ?makeDesign) or AMCE estimates are biased.');
+  }
+  out.push('res <- amce(f, data = long, respondent.id = "respondent_id", cluster = TRUE)');
+  out.push('summary(res)');
+  out.push('```');
+  return out.join('\n');
 }
 
-$('exportQualtrics').onclick=()=>{
+/* ---- 3./4. Setup guide (ja/en, identical content) ---- */
+function buildSetupDoc(d, lang){
+  const x=qxData(d), J=lang==='ja', t=(ja,en)=>J?ja:en, base=qSlug(x.title);
+  const nCols=x.NT*x.NP*x.NA+1;
+  const choiceList=x.labels.map((l,i)=>'`'+l+'` = '+(i+1)).join(t('、',', '));
+  const taskVars='`task1` … `task'+x.NT+'`';
+  const attrMap=x.attrNames.map((n,i)=>'| A'+(i+1)+' | '+mdCell(n)+' |').join('\n');
+  const L=[];
+  L.push('# '+x.title+t(' — Qualtrics 設置手順書',' — Qualtrics setup guide'));
+  L.push('');
+  L.push(t(
+    'Conjoint Experiment Builder が自動生成。本設計は **'+x.NA+' 属性・'+x.NT+' タスク・1タスクあたり '+x.NP+' プロファイル**。',
+    'Generated by Conjoint Experiment Builder. This design has **'+x.NA+' attribute'+(x.NA===1?'':'s')+', '+x.NT+' task'+(x.NT===1?'':'s')+', and '+x.NP+' profiles per task**.'));
+  L.push('');
+  L.push(t(
+    '同梱の `'+base+'_qualtrics.js` が各タスク設問に貼り付けるコードです。本書はその周辺設定を説明します。',
+    'The companion `'+base+'_qualtrics.js` is the code you paste into each task question. This guide covers everything around it.'));
+  L.push(''); L.push('---'); L.push('');
+
+  L.push(t('## a. 選択タスク設問の作成','## a. Create the choice-task questions'));
+  L.push('');
+  L.push(t(
+    '**多肢選択（単一回答）を '+x.NT+' 問**作成します（1タスク＝1問、**1ページ1タスク**、回答を**強制**）。各設問で:',
+    'Create **'+x.NT+' Multiple Choice (single-answer) question'+(x.NT===1?'':'s')+'** — one per task, **one task per page**, with **response forced**. For each:'));
+  L.push('');
+  L.push(t(
+    '1. 選択肢は '+x.NP+' 個。**選択肢テキストは Design で設定したプロファイルラベルと同一**にする: '+choiceList+'。',
+    '1. Add '+x.NP+' choices. **Their text must match the profile labels set in Design**: '+choiceList+'.'));
+  L.push(t(
+    '2. これらの選択肢の **recode 値**を `1` … `'+x.NP+'` に設定（Question behaviour ▸ Recode values）。R コードがこれに依存します。',
+    '2. Set the choices’ **recode values** to `1` … `'+x.NP+'` (Question behaviour ▸ Recode values). The R code relies on this.'));
+  L.push(t(
+    '3. 変数名（Export/Variable name）を小文字で '+taskVars+' にする。',
+    '3. Name the variables (Export/Variable name) in lowercase: '+taskVars+'.'));
+  L.push(t(
+    '4. 歯車 ▸ **Add JavaScript** に `'+base+'_qualtrics.js` の中身を貼り付ける。',
+    '4. Gear ▸ **Add JavaScript**, paste the whole of `'+base+'_qualtrics.js`.'));
+  L.push(''); L.push('');
+
+  L.push(t('## b. JavaScript の貼り付け','## b. Paste the JavaScript'));
+  L.push('');
+  L.push(t(
+    '**全設問に同一のコード**を貼り、各設問で `var TASK = 1;` の数字だけをそのタスク番号に変えます（タスク2の設問は `var TASK = 2;`）。',
+    'Paste the **same code into every question**; in each, change only the number in `var TASK = 1;` to that question’s task number (task 2 uses `var TASK = 2;`).'));
+  L.push('');
+  L.push(t(
+    '**推奨**: まず1問を完全に作り込み（選択肢・recode・変数名・JS）、それを '+x.NT+' 問に**複製**してから各複製の `TASK` を書き換えると速く確実です。',
+    '**Recommended**: build one question completely (choices, recode, variable name, JS), then **duplicate** it into '+x.NT+' questions and edit only `TASK` in each copy.'));
+  L.push('');
+  L.push(t(
+    'コードは最初に読み込まれた設問で全タスクを一度だけ抽選・保存し、以降は該当タスクを描画するだけなので、行き来しても内容は一貫します。',
+    'The code draws every task once on the first question that loads, stores it, and afterwards just renders the relevant task — so profiles stay consistent across navigation.'));
+  L.push(''); L.push('---'); L.push('');
+
+  L.push(t('## c. Survey Flow で埋め込みデータを宣言（必須）','## c. Declare the Embedded Data in the Survey Flow (required)'));
+  L.push('');
+  L.push(t(
+    '**Survey ▸ Survey Flow** で **Embedded Data 要素を、タスク設問ブロックの上**に置き、`'+base+'_qualtrics_fields.txt` の各行（値は空欄）を宣言します。',
+    'In **Survey ▸ Survey Flow**, add an **Embedded Data element ABOVE the task-question block** and declare every line of `'+base+'_qualtrics_fields.txt` (leave the value blank).'));
+  L.push('');
+  L.push(t(
+    '> **重要（プレフィックス）**: Simple layout では `setJSEmbeddedData` の値は **`__js_` プレフィックス付き**で保存されます。したがって**フロー宣言側は `__js_C_ORDER` のように `__js_` を付け**、**JS コード側には付けません**（コードは `C_ORDER` のまま）。旧レイアウト（クラシック/フラット）を使う場合は、プレフィックスなしの `C_ORDER` / `C_T{t}_P{p}_A{a}` で宣言してください。',
+    '> **Important (prefix)**: In Simple layout, `setJSEmbeddedData` values are saved **with a `__js_` prefix**. So **declare fields WITH `__js_`** (e.g. `__js_C_ORDER`) in the flow, but **do NOT add the prefix in the JS code** (it stays `C_ORDER`). If you use the older Classic/Flat layout, declare the fields WITHOUT the prefix (`C_ORDER`, `C_T{t}_P{p}_A{a}`).'));
+  L.push('');
+  L.push(t(
+    '`fields.txt` は全 **'+nCols+' フィールド**（`__js_C_ORDER` + '+x.NT+'×'+x.NP+'×'+x.NA+' セル）です。宣言しないと `setJSEmbeddedData` を呼んでも値はデータセットに保存されません。',
+    'The `fields.txt` list is all **'+nCols+' fields** (`__js_C_ORDER` + '+x.NT+'×'+x.NP+'×'+x.NA+' cells). Without the declaration, `setJSEmbeddedData` values are never saved to your dataset.'));
+  L.push(''); L.push('---'); L.push('');
+
+  L.push(t('## d. 動作テスト','## d. Test it'));
+  L.push('');
+  L.push(t(
+    '**毎回、新しいシークレット/プライベートウィンドウ**でプレビュー・テストします（同一ブラウザだと `sessionStorage` に前回のプランが残り、再抽選されません）。',
+    'Preview/test in a **fresh incognito/private window every time** (the same browser keeps the previous plan in `sessionStorage`, so it won’t re-draw).'));
+  L.push('');
+  L.push(t(
+    '完走後にレスポンスを**エクスポート**し、`__js_C_ORDER` と全 `__js_C_T*_P*_A*` 列が**埋まっている**ことを確認します。埋め込みデータ列は合計 **'+nCols+' 列**（task 列とは別）になるはずです。',
+    'Complete a run, **export** the response, and confirm `__js_C_ORDER` and every `__js_C_T*_P*_A*` column is **filled**. There should be **'+nCols+' embedded-data columns** in total (separate from the task columns).'));
+  L.push(''); L.push('---'); L.push('');
+
+  L.push(t('## e. R での分析（ワイド → long → AMCE）','## e. Analyse in R (wide → long → AMCE)'));
+  L.push('');
+  L.push(t(
+    'Qualtrics から **CSV（ワイド形式）**でエクスポートし、以下を実行します。列名は `__js_` プレフィックス付きで参照します（旧レイアウトの場合は `ed <- ""` に変更）。',
+    'Export from Qualtrics as **CSV (wide format)** and run the following. Columns are referenced WITH the `__js_` prefix (for the Classic/Flat layout, set `ed <- ""`).'));
+  L.push('');
+  L.push(rAnalysisBlock(x));
+  L.push(''); L.push('---'); L.push('');
+
+  L.push(t('## f. トラブルシュート','## f. Troubleshooting'));
+  L.push('');
+  L.push(t('| 症状 | 主な原因 |','| Symptom | Likely cause |'));
+  L.push('| --- | --- |');
+  L.push(t(
+    '| `C_` 列が CSV に無い | Survey Flow で宣言し忘れ／宣言要素がタスクブロックの**後ろ**にある |',
+    '| `C_` columns missing from the CSV | Not declared in the Survey Flow / the Embedded-Data element is **below** the task block |'));
+  L.push(t(
+    '| 列はあるが**空** | `__js_` プレフィックスの不一致／JS の貼り忘れ・旧版のまま／宣言を適用する前の回答／同一ブラウザに残った古い `sessionStorage` |',
+    '| Columns present but **empty** | `__js_` prefix mismatch / JS not pasted or an old version / responses collected before the declaration was applied / stale `sessionStorage` in the same browser |'));
+  L.push('');
+  if(x.nonUniform||x.hasConstraints){
+    L.push('---'); L.push('');
+    L.push(t('## g. 重み・制約に関する注意','## g. Note on weights & constraints'));
+    L.push('');
+    L.push(t(
+      'この設計は'+[x.nonUniform?'**非一様な水準の重み**':'',x.hasConstraints?'**属性間の制約**':''].filter(Boolean).join('と')+'を含みます。既定の `amce()` は各水準が独立・等確率と仮定するためそのままでは**バイアス**が生じます。真の周辺確率や除外組合せを表す `design` 引数（`makeDesign()`、`?makeDesign` 参照）を渡してください。',
+      'This design uses '+[x.nonUniform?'**non-uniform level weights**':'',x.hasConstraints?'**cross-attribute constraints**':''].filter(Boolean).join(' and ')+'. The default `amce()` assumes independent, equally likely levels, so estimates are **biased** unless you pass a `design` argument (built with `makeDesign()`; see `?makeDesign`) describing the true marginal probabilities and/or excluded combinations.'));
+    L.push('');
+  }
+  return L.join('\n');
+}
+
+/* ---- 5./6. Codebook (ja/en) ---- */
+function buildCodebookDoc(d, lang){
+  const x=qxData(d), J=lang==='ja', t=(ja,en)=>J?ja:en;
+  const taskValueLabels=x.labels.map((l,i)=>(i+1)+' = '+l).join(', ');
+  const L=[];
+  L.push('# '+x.title+t(' — コードブック',' — Codebook'));
+  L.push('');
+  L.push(t(
+    'Conjoint Experiment Builder が自動生成。'+x.NA+' 属性・'+x.NT+' タスク・1タスク '+x.NP+' プロファイル。',
+    'Generated by Conjoint Experiment Builder. '+x.NA+' attributes, '+x.NT+' tasks, '+x.NP+' profiles per task.'));
+  L.push(''); L.push('---'); L.push('');
+
+  L.push(t('## a. ワイド形式（Qualtrics 生データ）の変数','## a. Wide-format variables (raw Qualtrics)'));
+  L.push('');
+  L.push(t('| 変数 | 内容 | 値 |','| Variable | Meaning | Values |'));
+  L.push('| --- | --- | --- |');
+  L.push(t(
+    '| `task1` … `task'+x.NT+'` | 各タスクで選ばれたプロファイル（recode 値） | '+taskValueLabels+' |',
+    '| `task1` … `task'+x.NT+'` | Chosen profile per task (recoded) | '+taskValueLabels+' |'));
+  L.push(t(
+    '| `__js_C_ORDER` | 属性の提示順（0 始まりの添字、`|` 区切り） | 例 `2|0|1|...` |',
+    '| `__js_C_ORDER` | Attribute display order (0-based indices, `|`-separated) | e.g. `2|0|1|...` |'));
+  L.push(t(
+    '| `__js_C_T{t}_P{p}_A{a}` | タスク t・プロファイル p・属性 a に提示された**水準テキスト** | 水準文字列 |',
+    '| `__js_C_T{t}_P{p}_A{a}` | **Level text** shown for task t, profile p, attribute a | level string |'));
+  L.push('');
+  L.push(t(
+    '`t`=1…'+x.NT+'、`p`=1…'+x.NP+'、`a`=1…'+x.NA+'（属性番号は下表参照）。この他に Qualtrics 標準メタデータ（`ResponseId`, `StartDate`, `EndDate`, `Progress`, `Duration (in seconds)` など）が付きます。',
+    '`t`=1…'+x.NT+', `p`=1…'+x.NP+', `a`=1…'+x.NA+' (attribute numbers below). Qualtrics also adds standard metadata (`ResponseId`, `StartDate`, `EndDate`, `Progress`, `Duration (in seconds)`, …).'));
+  L.push(''); L.push('---'); L.push('');
+
+  L.push(t('## b. 属性対応表','## b. Attribute reference'));
+  L.push('');
+  L.push('| '+t('番号','Code')+' | '+t('属性名','Attribute')+' | '+t('水準（提示テキスト）','Levels (shown text)')+(x.nonUniform?' | '+t('重み','Weights'):'')+' |');
+  L.push('| --- | --- | ---'+(x.nonUniform?' | ---':'')+' |');
+  x.cj.attributes.forEach((a,i)=>{
+    const lv=a.levels.map(l=>mdCell(l.text)).join(' / ');
+    let row='| A'+(i+1)+' | '+mdCell(a.name)+' | '+lv;
+    if(x.nonUniform) row+=' | '+a.levels.map(l=>l.weight).join(' / ');
+    row+=' |';
+    L.push(row);
+  });
+  L.push('');
+  if(x.hasConstraints){
+    L.push(t('**制約（禁止組合せ）**:','**Constraints (forbidden combinations)**:'));
+    x.cj.constraints.forEach(c=>{
+      const A=x.cj.attributes, na=A[c.aA], nb=A[c.aB];
+      L.push('- '+mdCell(na.name)+' = `'+mdCell(na.levels[c.lA].text)+'` '+t('かつ','with')+' '+mdCell(nb.name)+' = `'+mdCell(nb.levels[c.lB].text)+'` '+t('を禁止','forbidden'));
+    });
+    L.push('');
+  }
+  L.push('---'); L.push('');
+
+  L.push(t('## c. long 形式（分析用）の変数','## c. Long-format variables (for analysis)'));
+  L.push('');
+  L.push(t('| 変数 | 内容 |','| Variable | Meaning |'));
+  L.push('| --- | --- |');
+  L.push(t('| `respondent_id` | 回答者 ID（`ResponseId`） |','| `respondent_id` | Respondent ID (`ResponseId`) |'));
+  L.push(t('| `task` | タスク番号（1…'+x.NT+'） |','| `task` | Task number (1…'+x.NT+') |'));
+  L.push(t('| `profile` | プロファイル番号（1…'+x.NP+'） |','| `profile` | Profile number (1…'+x.NP+') |'));
+  L.push(t('| `chosen` | そのプロファイルが選ばれたら 1、他は 0 |','| `chosen` | 1 if this profile was chosen, else 0 |'));
+  L.push(t('| '+x.attrNames.map(n=>'`'+mdCell(n)+'`').join(', ')+' | 各属性の提示水準（factor） |','| '+x.attrNames.map(n=>'`'+mdCell(n)+'`').join(', ')+' | Shown level per attribute (factor) |'));
+  L.push(''); L.push('---'); L.push('');
+
+  L.push(t('## d. 乱択（ランダム化）手続き','## d. Randomization procedure'));
+  L.push('');
+  L.push(t('- **水準の抽選**: 各属性・各プロファイルについて独立に'+(x.nonUniform?'（重み付き）':'（等確率）')+'抽選。','- **Level draw**: for each attribute and profile, drawn independently'+(x.nonUniform?' (weighted)':' (uniform)')+'.'));
+  if(x.hasConstraints) L.push(t('- **制約**: 禁止組合せを含むプロファイルは棄却し再抽選（rejection sampling）。','- **Constraints**: profiles containing a forbidden combination are rejected and redrawn (rejection sampling).'));
+  L.push(t('- **タスク内重複**: 同一タスク内で同じプロファイルが出た場合は再抽選。','- **Within-task duplicates**: an identical profile within a task is redrawn.'));
+  L.push(t('- **属性の提示順**: 回答者ごとに1回ランダム化し、その回答者の全タスクで固定（`__js_C_ORDER` に記録）。','- **Attribute order**: randomized once per respondent and held fixed across that respondent’s tasks (recorded in `__js_C_ORDER`).'));
+  L.push(t('- **実行場所**: 抽選は回答者のブラウザ上で実行されます。','- **Where**: the draw runs in the respondent’s browser.'));
+  L.push('');
+  return L.join('\n');
+}
+
+/* ---- 7./8. Ethics-review annex (ja/en) — factual draft only ---- */
+function buildEthicsDoc(d, lang){
+  const x=qxData(d), J=lang==='ja', t=(ja,en)=>J?ja:en;
+  const L=[];
+  L.push('# '+x.title+t(' — 調査設計説明書（倫理審査添付用・草稿）',' — Study Design Description (ethics-review annex, draft)'));
+  L.push('');
+  L.push(t(
+    '> 本書は Conjoint Experiment Builder が生成した**草稿**であり、事実記述（課題構造・刺激・手続き・取得データ）のみを含みます。`[ ]` の項目は**研究者が記入・確認**してください。',
+    '> This is a Conjoint Experiment Builder **draft** containing factual descriptions only (task structure, stimuli, procedure, data collected). The `[ ]` items **must be completed and verified by the researcher**.'));
+  L.push(''); L.push('---'); L.push('');
+
+  L.push(t('## a. 課題構造','## a. Task structure'));
+  L.push('');
+  L.push(t(
+    '選択型コンジョイント（forced-choice conjoint）。各回答者は **'+x.NT+' 回の選択タスク**に回答し、各タスクで **'+x.NP+' 個のプロファイル**が同時提示され、最も好むものを**強制選択**する。',
+    'A forced-choice conjoint task. Each respondent completes **'+x.NT+' choice task'+(x.NT===1?'':'s')+'**; in each, **'+x.NP+' profiles** are shown side by side and the respondent must choose the one they most prefer (forced choice).'));
+  L.push(''); L.push('---'); L.push('');
+
+  L.push(t('## b. 提示刺激の全空間','## b. Full space of presented stimuli'));
+  L.push('');
+  L.push(t(
+    'プロファイルは以下の '+x.NA+' 属性の水準を組み合わせた**架空（実在しない）**の記述である。全属性・全水準は次のとおり:',
+    'Each profile is a **fictional (non-real)** description combining levels of the following '+x.NA+' attributes. All attributes and levels:'));
+  L.push('');
+  x.cj.attributes.forEach((a,i)=>{
+    L.push('- **'+mdCell(a.name)+'** ('+a.levels.length+'): '+a.levels.map(l=>mdCell(l.text)).join(' / '));
+  });
+  L.push('');
+  L.push(t(
+    'これらを組み合わせたプロファイルの総数は **'+combosStr(x)+'** 通り'+(x.hasConstraints?'（うち禁止組合せを除く）':'')+'。実際に各回答者へ提示されるのはこの空間からランダムに抽出した一部である。',
+    'The total number of distinct profiles is **'+combosStr(x)+'**'+(x.hasConstraints?' (before removing forbidden combinations)':'')+'. Each respondent sees a random subset of this space.'));
+  L.push(''); L.push('---'); L.push('');
+
+  L.push(t('## c. ランダム化手続き（概要）','## c. Randomization procedure (overview)'));
+  L.push('');
+  L.push(t(
+    '各属性の水準は'+(x.nonUniform?'指定の重みに従って':'等確率で')+'独立に抽選され、'+(x.hasConstraints?'禁止組合せは除外され、':'')+'同一タスク内で同じプロファイルは重複しないよう再抽選される。属性の提示順は回答者ごとに1回ランダム化され全タスクで固定される。抽選は回答者のブラウザ上で行われる。',
+    'Attribute levels are drawn independently'+(x.nonUniform?' according to specified weights':' with equal probability')+', '+(x.hasConstraints?'forbidden combinations are excluded, ':'')+'and identical profiles within a task are redrawn. Attribute display order is randomized once per respondent and held fixed across tasks. The draw runs in the respondent’s browser.'));
+  L.push(''); L.push('---'); L.push('');
+
+  L.push(t('## d. 取得するデータ','## d. Data collected'));
+  L.push('');
+  L.push(t('- 各タスクでの**選択**（選ばれたプロファイル番号）','- The **choice** in each task (which profile was selected)'));
+  L.push(t('- 各プロファイルに**提示された水準**','- The **levels shown** for each profile'));
+  L.push(t('- Qualtrics 標準メタデータ（回答 ID・開始/終了時刻・所要時間・進捗など）','- Standard Qualtrics metadata (response ID, start/end time, duration, progress, etc.)'));
+  L.push('');
+  L.push(t(
+    '> **匿名化に関する注記**: 本調査設計自体は個人識別情報（PII）を取得しません。ただし **Qualtrics は既定で回答者の IP アドレスと位置情報を記録**します。必要に応じてアンケートオプションで「IP アドレスを記録しない／位置情報を匿名化」等の設定を検討してください。',
+    '> **Anonymization note**: The study design itself collects no personally identifying information (PII). However, **Qualtrics records the respondent’s IP address and geolocation by default**. Consider the survey options to stop recording IP addresses / anonymize location as appropriate.'));
+  L.push(''); L.push('---'); L.push('');
+
+  L.push(t('## e. 研究者が記入する項目','## e. To be completed by the researcher'));
+  L.push('');
+  L.push(t('以下はツールでは自動記入されません。研究計画に基づき記入してください。','The following are not auto-filled. Complete them from your study protocol.'));
+  L.push('');
+  L.push('- '+t('研究目的','Research purpose')+': [ ]');
+  L.push('- '+t('対象者・リクルート方法','Participants & recruitment')+': [ ]');
+  L.push('- '+t('同意取得手続き','Informed-consent procedure')+': [ ]');
+  L.push('- '+t('謝礼','Compensation')+': [ ]');
+  L.push('- '+t('データ保管期間・管理者','Data retention period & data manager')+': [ ]');
+  L.push('- '+t('連絡先','Contact')+': [ ]');
+  L.push('');
+  return L.join('\n');
+}
+
+/* Assemble the 9-file bundle for the current design. */
+function buildQualtricsBundle(d){
+  const base=qSlug(d.title);
+  return [
+    {name: base+'_qualtrics.js',          content: buildQualtricsJS(d)},
+    {name: base+'_qualtrics_fields.txt',  content: buildQualtricsFieldsTxt(d)},
+    {name: base+'_qualtrics_setup_ja.md', content: buildSetupDoc(d,'ja')},
+    {name: base+'_qualtrics_setup_en.md', content: buildSetupDoc(d,'en')},
+    {name: base+'_codebook_ja.md',        content: buildCodebookDoc(d,'ja')},
+    {name: base+'_codebook_en.md',        content: buildCodebookDoc(d,'en')},
+    {name: base+'_ethics_annex_ja.md',    content: buildEthicsDoc(d,'ja')},
+    {name: base+'_ethics_annex_en.md',    content: buildEthicsDoc(d,'en')},
+    {name: 'design.json',                 content: buildDesignSnapshot(d)}
+  ];
+}
+
+/* Load JSZip from cdnjs once; resolves the JSZip constructor. */
+function loadJSZip(){
+  if(window.JSZip) return Promise.resolve(window.JSZip);
+  return new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+    s.onload=()=>window.JSZip?resolve(window.JSZip):reject(new Error('JSZip missing after load'));
+    s.onerror=()=>reject(new Error('JSZip failed to load'));
+    document.head.appendChild(s);
+  });
+}
+function guessType(name){
+  if(/\.js$/.test(name)) return 'application/javascript';
+  if(/\.json$/.test(name)) return 'application/json';
+  if(/\.md$/.test(name)) return 'text/markdown';
+  return 'text/plain';
+}
+function downloadBlob(name, blob){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+/* Fallback when JSZip is unavailable: download each file in turn. */
+function downloadBundleIndividually(bundle){
+  bundle.forEach((f,i)=>{ setTimeout(()=>downloadFile(f.name, f.content, guessType(f.name)), i*350); });
+}
+async function exportQualtricsZip(){
   syncStudyFields();
   if(!design.attributes.length){ flash('Add attributes first'); return; }
-  const base=qSlug(design.title);
-  downloadFile(base+'_qualtrics.js', buildQualtricsJS(design), 'application/javascript');
-  setTimeout(()=>downloadFile(base+'_qualtrics_setup.md', buildQualtricsSetup(design), 'text/markdown'), 400);
-  flash('Qualtrics files exported');
-};
+  const bundle=buildQualtricsBundle(design);
+  const zipName=qSlug(design.title)+'_qualtrics.zip';
+  try{
+    const JSZip=await loadJSZip();
+    const zip=new JSZip();
+    bundle.forEach(f=>zip.file(f.name, f.content));
+    const blob=await zip.generateAsync({type:'blob'});
+    downloadBlob(zipName, blob);
+    flash('Qualtrics ZIP exported ('+bundle.length+' files)');
+  }catch(e){
+    downloadBundleIndividually(bundle);
+    flash('ZIP unavailable — downloaded '+bundle.length+' files individually');
+  }
+}
+$('exportQualtrics').onclick=exportQualtricsZip;
 
 $('importBtn').onclick=()=>$('importFile').click();
 $('importFile').onchange=e=>{
@@ -951,14 +1234,15 @@ function renderTask(){
   const t=run.current, task=run.tasks[t], n=design.numProfiles;
   const pct=Math.round((t/design.numTasks)*100);
   const rows=run.order.map(i=>design.attributes[i]);
+  const labels=profileLabelsOf(design);
   let cards='';
   for(let p=0;p<n;p++){
     cards+=`<div class="profile" data-p="${p}">
-      <h3>Profile ${p+1}</h3>
+      <h3>${esc(labels[p])}</h3>
       <table class="ptable">${rows.map(a=>`<tr><td class="k">${esc(a.name)}</td><td>${esc(task[p][a.id])}</td></tr>`).join('')}</table>
       ${design.askRating?`<div class="pick"><label style="font-weight:600">Rating (1–7)</label>
         <select class="rating" data-p="${p}"><option value="">—</option>${[1,2,3,4,5,6,7].map(v=>`<option>${v}</option>`).join('')}</select></div>`:''}
-      <div class="pick"><button class="btn ghost pickbtn" data-p="${p}">Choose Profile ${p+1}</button></div>
+      <div class="pick"><button class="btn ghost pickbtn" data-p="${p}">Choose ${esc(labels[p])}</button></div>
     </div>`;
   }
   stage.innerHTML=`

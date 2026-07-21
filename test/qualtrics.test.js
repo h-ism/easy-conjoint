@@ -92,14 +92,19 @@ function makeEnv(opts) {
   w.Qualtrics = { SurveyEngine: SE };
   return env;
 }
-function runTask(env, taskNum) {
+function runTask(env, taskNum, src) {
   const doc = env.window.document;
   const container = doc.createElement("div");
   doc.body.appendChild(container);
   env.currentQuestion = { getQuestionContainer: function () { return container; } };
-  const c = code.replace("var TASK = 1;", "var TASK = " + taskNum + ";");
+  const c = (src || code).replace("var TASK = 1;", "var TASK = " + taskNum + ";");
   env.window.eval(c);
   return container;
+}
+function headerLabels(container) {
+  /* thead th cells after the empty corner cell */
+  const ths = Array.prototype.slice.call(container.querySelectorAll("thead th"));
+  return ths.slice(1).map(function (th) { return th.textContent; });
 }
 function attrColumn(container) {
   const rows = Array.prototype.slice.call(container.querySelectorAll("tbody tr"));
@@ -263,6 +268,66 @@ ok(cont8.querySelector("table.cjoint-table") !== null, "table renders under new 
 const env8b = makeEnv({ jsApi: "only" });
 runTask(env8b, 1);
 eq(Object.keys(env8b.ED).length, NT * NP * NA + 1, "works with JS API only (no legacy methods)");
+
+/* =========================================================
+ * (9) profile labels with Japanese / quotes / angle brackets:
+ *     generated JS still parses and headers escape correctly.
+ * ========================================================= */
+console.log("\n(9) profile labels escape safely in the table header");
+const trickyLabels = ['候補者 "A" <甲>', 'B & <乙>'];
+const designL = Object.assign({}, design, { profileLabels: trickyLabels });
+const codeL = B.buildQualtricsJS(designL);
+let syntaxL = true;
+try { new vm.Script(codeL, { filename: "labels.js" }); }
+catch (e) { syntaxL = false; console.error("    " + e.message); }
+ok(syntaxL, "generated JS with tricky labels parses (no syntax error)");
+const envL = makeEnv();
+const contL = runTask(envL, 1, codeL);
+eq(headerLabels(contL), trickyLabels, "header cells render the exact labels (escaped, not broken markup)");
+
+/* =========================================================
+ * (10) design.json snapshot re-imports with labels intact.
+ * ========================================================= */
+console.log("\n(10) design.json round-trips through Import JSON");
+const snapshot = B.buildDesignSnapshot(designL);
+const parsed = JSON.parse(snapshot);
+const reimported = Object.assign(B.blankDesign(), parsed);   /* Import JSON logic */
+eq(reimported.profileLabels, trickyLabels, "profile labels restored from design.json");
+eq(reimported.attributes.map(function (a) { return a.name; }),
+   design.attributes.map(function (a) { return a.name; }), "attributes restored from design.json");
+eq(reimported.numTasks, NT, "numTasks restored from design.json");
+
+/* =========================================================
+ * (11) bundle has 9 files; fields.txt line count matches.
+ * ========================================================= */
+console.log("\n(11) export bundle: 9 files, correct field-list length");
+const bundle = B.buildQualtricsBundle(design);
+eq(bundle.length, 9, "bundle contains exactly 9 files");
+const names = bundle.map(function (f) { return f.name; });
+["_qualtrics.js", "_qualtrics_fields.txt", "_qualtrics_setup_ja.md", "_qualtrics_setup_en.md",
+ "_codebook_ja.md", "_codebook_en.md", "_ethics_annex_ja.md", "_ethics_annex_en.md"].forEach(function (suf) {
+  ok(names.some(function (n) { return n.indexOf(suf) !== -1; }), "bundle includes *" + suf);
+});
+ok(names.indexOf("design.json") !== -1, "bundle includes design.json");
+const fieldsFile = bundle.find(function (f) { return /_fields\.txt$/.test(f.name); });
+const fieldLines = fieldsFile.content.split("\n");
+eq(fieldLines.length, NT * NP * NA + 1, "fields.txt has NT*NP*NA + 1 lines");
+ok(fieldLines.every(function (l) { return l.indexOf("__js_") === 0; }), "every field line is __js_-prefixed");
+ok(fieldLines.indexOf("__js_C_ORDER") !== -1, "fields.txt includes __js_C_ORDER");
+ok(fieldLines.indexOf("__js_C_T" + NT + "_P" + NP + "_A" + NA) !== -1, "fields.txt includes the last cell field");
+
+/* =========================================================
+ * (12) JSZip-unavailable fallback downloads every file.
+ * ========================================================= */
+console.log("\n(12) fallback downloads each file individually when ZIP is unavailable");
+const dlNames = [];
+const origDl = B.downloadFile, origST = B.setTimeout;
+B.downloadFile = function (n) { dlNames.push(n); };
+B.setTimeout = function (fn) { fn(); return 0; };   /* run staggered timers synchronously */
+try { B.downloadBundleIndividually(bundle); }
+finally { B.downloadFile = origDl; B.setTimeout = origST; }
+eq(dlNames.length, 9, "fallback downloaded all 9 files");
+eq(dlNames.slice().sort(), names.slice().sort(), "fallback downloaded exactly the bundle files");
 
 /* =========================================================
  * results
