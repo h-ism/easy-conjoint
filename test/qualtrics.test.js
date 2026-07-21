@@ -183,14 +183,32 @@ const firstTable = tableText(first);
 env5.window.sessionStorage.clear();
 env5.setCalls = 0;
 const resumed = runTask(env5, 1);
-eq(env5.setCalls, 0, "resume wrote NO embedded data (no re-randomization)");
-eq(env5.ED, edSnapshot, "embedded data unchanged after resume");
+ok(env5.setCalls > 0, "resume re-writes embedded data idempotently (never left empty)");
+eq(env5.ED, edSnapshot, "embedded data unchanged after resume (no re-randomization)");
 eq(tableText(resumed), firstTable, "resumed table identical to original");
 
 /* also confirm a later task restores consistently in the resumed session */
+env5.setCalls = 0;
 const resumedT2 = runTask(env5, 2);
 ok(resumedT2.querySelector("table.cjoint-table") !== null, "later task also renders after resume");
-eq(env5.setCalls, 0, "still no embedded-data writes after rendering task 2");
+ok(env5.setCalls > 0, "task 2 also writes embedded data on resume");
+eq(env5.ED, edSnapshot, "embedded data still unchanged after task 2");
+
+/* =========================================================
+ * (6) 2nd response in the same browser: sessionStorage survives
+ *     but Embedded Data is fresh (empty) -> must be re-populated.
+ *     Regression guard: loadPlan used to return the cached plan
+ *     without ever writing Embedded Data, recording empty data.
+ * ========================================================= */
+console.log("\n(6) new response reuses cached plan but still writes embedded data");
+const env6 = makeEnv();
+runTask(env6, 1);                       /* first respondent: populates ED + sessionStorage */
+const ed6 = JSON.parse(JSON.stringify(env6.ED));
+env6.ED = {};                           /* new Qualtrics response -> fresh, empty ED */
+env6.setCalls = 0;
+runTask(env6, 1);                       /* sessionStorage still holds the cached plan */
+eq(Object.keys(env6.ED).length, NT * NP * NA + 1, "embedded data re-written for the new response");
+eq(env6.ED, ed6, "re-written values match the cached plan");
 
 /* =========================================================
  * results
