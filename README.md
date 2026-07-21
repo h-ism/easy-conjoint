@@ -29,6 +29,33 @@ everything runs locally in the respondent's browser.
 - **Export CSV (long format)**: one row per profile per task, with a `chosen` (0/1)
   outcome and one column per attribute — exactly the shape AMCE estimation expects
 
+## Sampling weights (the numbers next to each level)
+
+The number beside every level is a **sampling weight** — it controls how often that level
+is randomly drawn when profiles are generated.
+
+For a given attribute, the probability a level is picked is its weight divided by the sum
+of all that attribute's weights.
+
+- **All equal (the default, every level = 1)** → uniform randomization. Each level is
+  equally likely. This is the standard conjoint setup and what you want in most cases.
+- **Unequal weights** → some levels appear more or less often. Example: if *Country of
+  origin* has 5 levels and you set *Germany* to `2` with the others at `1` (total = 6),
+  Germany appears ~33% of the time and each other country ~17%.
+- **Weight = 0** → the level is effectively never drawn, without deleting it.
+
+When you might change them:
+
+- To **match a real population** so the distribution of profiles mirrors actual
+  demographics rather than being uniform.
+- To **oversample a rare-but-important level** and get enough observations to estimate its
+  effect precisely.
+- To **temporarily disable** a level (set to 0) without removing it.
+
+⚠️ Unequal weights make the design no longer uniformly randomized, which changes the
+interpretation of AMCEs (they become weighted by your sampling distribution). For a
+standard conjoint with clean, equally-weighted AMCE estimates, **leave them all at 1.**
+
 ## Analyze in R
 
 ```r
