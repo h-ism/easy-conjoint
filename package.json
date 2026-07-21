@@ -1,0 +1,12 @@
+{
+  "name": "conjoint-experiment-builder",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Single-file conjoint experiment builder + Qualtrics export",
+  "scripts": {
+    "test": "node test/qualtrics.test.js"
+  },
+  "devDependencies": {
+    "jsdom": "^24.0.0"
+  }
+}

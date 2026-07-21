@@ -28,6 +28,25 @@ everything runs locally in the respondent's browser.
 - Responses stored in the browser (localStorage)
 - **Export CSV (long format)**: one row per profile per task, with a `chosen` (0/1)
   outcome and one column per attribute — exactly the shape AMCE estimation expects
+  (CSV is written with a UTF-8 BOM so Excel reads Japanese/Unicode text correctly)
+
+### Export for Qualtrics — field it at scale
+
+The **Export for Qualtrics** button (Design tab) generates two files that let you run the
+exact same design as a real Qualtrics survey:
+
+- **`{title}_qualtrics.js`** — an ES5 JavaScript snippet you paste into each choice-task
+  question (gear ▸ Add JavaScript). It randomizes every task once per respondent (attribute
+  order shuffled once and shared across tasks; constraints via rejection sampling; no
+  duplicate profiles within a task), writes the shown levels to Embedded Data, renders the
+  profile table itself, and is **resume-safe** (sessionStorage → saved Embedded Data → fresh
+  draw, so a resumed session never re-randomizes). You only change one line — `var TASK = 1;`
+  — per question.
+- **`{title}_qualtrics_setup.md`** — a step-by-step setup guide with your actual attribute
+  names and task count baked in: how to build the questions, the full list of Embedded Data
+  fields to declare in the Survey Flow (required — `setEmbeddedData` alone doesn't record
+  them), the `A1…AK` ↔ attribute map, and an R snippet that reshapes the wide Qualtrics CSV
+  to long format and runs `cjoint::amce`.
 
 ## Sampling weights (the numbers next to each level)
 
