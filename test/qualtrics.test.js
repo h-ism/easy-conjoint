@@ -211,6 +211,31 @@ eq(Object.keys(env6.ED).length, NT * NP * NA + 1, "embedded data re-written for 
 eq(env6.ED, ed6, "re-written values match the cached plan");
 
 /* =========================================================
+ * (7) a stale cached plan that does not match the current design
+ *     (profiles shorter than the attribute count) is discarded and
+ *     rebuilt instead of crashing writeEmbedded/renderTable.
+ * ========================================================= */
+console.log("\n(7) mismatched cached plan is discarded, not dereferenced");
+const env7 = makeEnv();
+const KEY7 = "cjoint_plan_" + NA + "x" + NT + "x" + NP;
+const order7 = []; for (let a = 0; a < NA; a++) order7.push(a);
+const tasks7 = [];
+for (let t = 0; t < NT; t++) {
+  const task = [];
+  for (let p = 0; p < NP; p++) {
+    const prof = []; for (let a = 0; a < NA - 1; a++) prof.push(0); /* too short */
+    task.push(prof);
+  }
+  tasks7.push(task);
+}
+env7.window.sessionStorage.setItem(KEY7, JSON.stringify({ order: order7, tasks: tasks7 }));
+let threw7 = false, cont7 = null;
+try { cont7 = runTask(env7, 1); } catch (e) { threw7 = true; }
+ok(!threw7, "stale/mismatched cached plan does not crash");
+eq(Object.keys(env7.ED).length, NT * NP * NA + 1, "mismatched plan discarded -> fresh plan written");
+ok(cont7 && cont7.querySelector("table.cjoint-table") !== null, "table still renders after discarding stale plan");
+
+/* =========================================================
  * results
  * ========================================================= */
 console.log("\n----------------------------------------");
