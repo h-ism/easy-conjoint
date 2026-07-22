@@ -1,4 +1,4 @@
-# Conjoint Experiment Builder
+# Easy Conjoint: Conjoint Experiment Builder
 
 A single self-contained HTML file (no server, works offline) for designing and running
 forced-choice paired-profile conjoint experiments — and exporting analysis-ready data.
